@@ -109,3 +109,42 @@ export const getHeroImageFromDB = async (): Promise<string | null> => {
     return null;
   }
 };
+
+// --- BACKUP SYSTEM (SYNC) ---
+
+export const exportDatabase = async (): Promise<string> => {
+  const videos = await getAllVideos();
+  const heroImage = await getHeroImageFromDB();
+  
+  const backupData = {
+    timestamp: new Date().toISOString(),
+    heroImage,
+    videos
+  };
+  
+  return JSON.stringify(backupData);
+};
+
+export const importDatabase = async (jsonString: string): Promise<boolean> => {
+  try {
+    const data = JSON.parse(jsonString);
+    
+    // Validate basic structure
+    if (!Array.isArray(data.videos)) {
+      throw new Error("Formato de backup inválido (vídeos não encontrados).");
+    }
+
+    // Restore Videos
+    await saveAllVideos(data.videos);
+
+    // Restore Hero Image
+    if (data.heroImage) {
+      await saveHeroImageToDB(data.heroImage);
+    }
+    
+    return true;
+  } catch (error) {
+    console.error("Falha ao restaurar backup:", error);
+    return false;
+  }
+};

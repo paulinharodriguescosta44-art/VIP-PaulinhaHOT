@@ -4,6 +4,7 @@ import { Hero } from './components/Hero';
 import { VideoCard } from './components/VideoCard';
 import { AdminUpload } from './components/AdminUpload';
 import { VipCodeModal } from './components/VipCodeModal';
+import { AdminBackupModal } from './components/AdminBackupModal';
 import { MOCK_VIDEOS } from './constants';
 import { Video, UserState } from './types';
 import { Lock, Plus, X, Settings } from 'lucide-react';
@@ -68,6 +69,7 @@ const App: React.FC = () => {
   const [isAdminMode, setIsAdminMode] = useState(loadAdminState);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [isVipModalOpen, setIsVipModalOpen] = useState(false);
+  const [isBackupModalOpen, setIsBackupModalOpen] = useState(false);
   const [playingVideo, setPlayingVideo] = useState<Video | null>(null);
 
   // CRITICAL: Flag to ensure we don't save empty arrays over existing data on boot
@@ -192,6 +194,7 @@ const App: React.FC = () => {
       <Navbar 
         isAdminMode={isAdminMode} 
         onOpenVipModal={() => setIsVipModalOpen(true)}
+        onOpenBackupModal={() => setIsBackupModalOpen(true)}
       />
 
       <main>
@@ -355,6 +358,14 @@ const App: React.FC = () => {
         <AdminUpload 
           onClose={() => setIsUploadModalOpen(false)}
           onAddVideo={handleAddVideo}
+        />
+      )}
+
+      {/* Backup Modal */}
+      {isBackupModalOpen && (
+        <AdminBackupModal 
+          onClose={() => setIsBackupModalOpen(false)}
+          onRestoreSuccess={() => setIsBackupModalOpen(false)}
         />
       )}
 

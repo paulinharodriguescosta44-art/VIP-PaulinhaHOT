@@ -39,16 +39,19 @@ export const AdminUpload: React.FC<AdminUploadProps> = ({ onClose, onAddVideo })
       // 1. Convert Image
       const thumbUrl = await convertToBase64(thumbnailFile);
       
-      // 2. Convert Video (if provided)
+      // 2. Convert Video
       let videoUrl = '';
       if (videoFile) {
-        // Warning: LocalStorage has a limit (usually 5-10MB). Large videos will fail to save permanently.
-        // For a robust app, you would upload to a server/cloud storage.
         try {
-           videoUrl = await convertToBase64(videoFile);
+          // IMPORTANT: We await the full conversion. 
+          // Do NOT use URL.createObjectURL() here because it disappears on refresh.
+          // We must store the actual data.
+          videoUrl = await convertToBase64(videoFile);
         } catch (videoError) {
-           console.warn("Vídeo muito grande para converter, usando URL temporária.", videoError);
-           videoUrl = URL.createObjectURL(videoFile);
+           console.error("Erro ao processar vídeo", videoError);
+           alert("O vídeo é muito grande para ser salvo no navegador. Tente um vídeo menor (curto).");
+           setIsProcessing(false);
+           return;
         }
       }
 
@@ -73,10 +76,10 @@ export const AdminUpload: React.FC<AdminUploadProps> = ({ onClose, onAddVideo })
       setDuration('');
       setThumbnailFile(null);
       setVideoFile(null);
-      alert('Vídeo adicionado com sucesso!');
+      alert('Vídeo salvo no catálogo!');
     } catch (error) {
       console.error("Erro ao processar arquivos", error);
-      alert("Erro ao processar os arquivos. O vídeo ou imagem podem ser muito grandes para o navegador.");
+      alert("Erro ao processar os arquivos. Tente novamente.");
     } finally {
       setIsProcessing(false);
     }
@@ -224,7 +227,7 @@ export const AdminUpload: React.FC<AdminUploadProps> = ({ onClose, onAddVideo })
               disabled={isProcessing}
               className={`px-8 py-2 bg-brand-600 hover:bg-brand-500 text-white rounded-lg font-bold shadow-lg shadow-brand-600/20 transition-all flex items-center gap-2 ${isProcessing ? 'opacity-50 cursor-wait' : ''}`}
             >
-              {isProcessing ? 'Salvando...' : 'Salvar Vídeo'}
+              {isProcessing ? 'Enviando...' : 'Salvar Vídeo'}
             </button>
           </div>
 

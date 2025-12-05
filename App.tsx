@@ -7,7 +7,7 @@ import { VipCodeModal } from './components/VipCodeModal';
 import { MOCK_VIDEOS } from './constants';
 import { Video, UserState } from './types';
 import { Lock, Plus, X, Settings } from 'lucide-react';
-import { getAllVideos, saveAllVideos } from './services/storage';
+import { getAllVideos, saveAllVideos, getHeroImageFromDB, saveHeroImageToDB } from './services/storage';
 
 // Simple Modal Video Player Component
 const VideoPlayer: React.FC<{ video: Video; onClose: () => void }> = ({ video, onClose }) => (
@@ -39,7 +39,7 @@ const VideoPlayer: React.FC<{ video: Video; onClose: () => void }> = ({ video, o
 );
 
 const App: React.FC = () => {
-  // Persistence Loading for User State
+  // Persistence Loading for User State (Small data can stay in LocalStorage)
   const loadUserState = (): UserState => {
     try {
       const saved = localStorage.getItem('paulinha_state');
@@ -54,24 +54,14 @@ const App: React.FC = () => {
     }
   };
 
-  // Persistence Loading for Hero Image
-  const loadHeroImage = (): string => {
-    try {
-      const saved = localStorage.getItem('paulinha_hero_image');
-      return saved || "https://picsum.photos/id/1025/1920/1080";
-    } catch (e) {
-      return "https://picsum.photos/id/1025/1920/1080";
-    }
-  }
-
   // Admin persistence
   const loadAdminState = (): boolean => {
     return localStorage.getItem('paulinha_admin_mode') === 'true';
   };
 
   const [userState, setUserState] = useState<UserState>(loadUserState);
-  const [videos, setVideos] = useState<Video[]>([]); // Start empty, load from DB
-  const [heroImage, setHeroImage] = useState<string>(loadHeroImage);
+  const [videos, setVideos] = useState<Video[]>([]); 
+  const [heroImage, setHeroImage] = useState<string>("https://picsum.photos/id/1025/1920/1080");
   const [selectedCategory, setSelectedCategory] = useState<string>('Todos');
   
   // Admin & Interaction States
@@ -80,35 +70,50 @@ const App: React.FC = () => {
   const [isVipModalOpen, setIsVipModalOpen] = useState(false);
   const [playingVideo, setPlayingVideo] = useState<Video | null>(null);
 
-  // Load Videos from IndexedDB on Mount
+  // CRITICAL: Flag to ensure we don't save empty arrays over existing data on boot
+  const [isStorageLoaded, setIsStorageLoaded] = useState(false);
+
+  // 1. Initial Data Load (Runs Once)
   useEffect(() => {
-    const fetchVideos = async () => {
+    const loadData = async () => {
+      // Load Videos
       const dbVideos = await getAllVideos();
       if (dbVideos.length > 0) {
         setVideos(dbVideos);
       } else {
         setVideos(MOCK_VIDEOS);
       }
+
+      // Load Hero Image
+      const dbImage = await getHeroImageFromDB();
+      if (dbImage) {
+        setHeroImage(dbImage);
+      }
+
+      setIsStorageLoaded(true); // Data loaded, now safe to save updates
     };
-    fetchVideos();
+    
+    loadData();
   }, []);
 
-  // Save Videos to IndexedDB when changed
+  // 2. Save Videos (Only if loaded)
   useEffect(() => {
-    if (videos.length > 0) {
+    if (isStorageLoaded) {
       saveAllVideos(videos);
     }
-  }, [videos]);
+  }, [videos, isStorageLoaded]);
 
-  // Save User State
+  // 3. Save Hero Image (Only if loaded)
+  useEffect(() => {
+    if (isStorageLoaded) {
+      saveHeroImageToDB(heroImage);
+    }
+  }, [heroImage, isStorageLoaded]);
+
+  // Save User State (LocalStorage is sync, safe to save always)
   useEffect(() => {
     localStorage.setItem('paulinha_state', JSON.stringify(userState));
   }, [userState]);
-
-  // Save Hero Image
-  useEffect(() => {
-    localStorage.setItem('paulinha_hero_image', heroImage);
-  }, [heroImage]);
 
   // Save Admin Mode
   useEffect(() => {
@@ -131,7 +136,6 @@ const App: React.FC = () => {
        setPlayingVideo(video); 
     } else {
       // 3. Conteúdo VIP Bloqueado -> Redireciona para pagamento
-      // (Não exibe se o usuário clicar na área de 'play' sem querer, mas o card inteiro é clicável)
       const confirmPurchase = window.confirm(`🔒 CONTEÚDO VIP\n\nEste conteúdo é exclusivo da Paulinha.\nDeseja liberar o acesso completo agora?`);
       
       if (confirmPurchase) {
@@ -173,6 +177,14 @@ const App: React.FC = () => {
     if (selectedCategory === 'Gratuitos') return !v.isExclusive;
     return v.tags.includes(selectedCategory);
   });
+
+  if (!isStorageLoaded) {
+    return (
+      <div className="min-h-screen bg-neutral-950 flex items-center justify-center">
+        <div className="text-brand-600 animate-pulse font-bold text-xl">Carregando catálogo...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-neutral-950 font-sans text-gray-100 selection:bg-brand-600 selection:text-white pb-20 relative">

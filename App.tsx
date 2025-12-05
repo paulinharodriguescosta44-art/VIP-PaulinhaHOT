@@ -5,7 +5,7 @@ import { VideoCard } from './components/VideoCard';
 import { AdminUpload } from './components/AdminUpload';
 import { VipCodeModal } from './components/VipCodeModal';
 import { AdminBackupModal } from './components/AdminBackupModal';
-import { MOCK_VIDEOS } from './constants';
+import { PERMANENT_VIDEOS, STATIC_HERO_IMAGE } from './constants';
 import { Video, UserState } from './types';
 import { Lock, Plus, X, Settings } from 'lucide-react';
 import { getAllVideos, saveAllVideos, getHeroImageFromDB, saveHeroImageToDB } from './services/storage';
@@ -30,8 +30,8 @@ const VideoPlayer: React.FC<{ video: Video; onClose: () => void }> = ({ video, o
           />
         ) : (
           <div className="text-center p-8">
-             <p className="text-gray-400 mb-2">Este é um vídeo de demonstração sem arquivo anexado.</p>
-             <p className="text-sm text-gray-600">No modo admin, faça upload de um arquivo .mp4 para vê-lo aqui.</p>
+             <p className="text-gray-400 mb-2">Este vídeo é exclusivo ou não possui prévia pública.</p>
+             <p className="text-sm text-gray-600">No modo admin, edite o código em 'constants.ts' para adicionar um link de vídeo.</p>
           </div>
         )}
       </div>
@@ -61,8 +61,8 @@ const App: React.FC = () => {
   };
 
   const [userState, setUserState] = useState<UserState>(loadUserState);
-  const [videos, setVideos] = useState<Video[]>([]); 
-  const [heroImage, setHeroImage] = useState<string>("https://picsum.photos/id/1025/1920/1080");
+  const [localVideos, setLocalVideos] = useState<Video[]>([]); 
+  const [heroImage, setHeroImage] = useState<string>(STATIC_HERO_IMAGE);
   const [selectedCategory, setSelectedCategory] = useState<string>('Todos');
   
   // Admin & Interaction States
@@ -78,18 +78,17 @@ const App: React.FC = () => {
   // 1. Initial Data Load (Runs Once)
   useEffect(() => {
     const loadData = async () => {
-      // Load Videos
+      // Load Local Videos (DB)
       const dbVideos = await getAllVideos();
-      if (dbVideos.length > 0) {
-        setVideos(dbVideos);
-      } else {
-        setVideos(MOCK_VIDEOS);
-      }
+      setLocalVideos(dbVideos);
 
       // Load Hero Image
+      // Priority: DB Image (if changed manually) -> Static Config Image
       const dbImage = await getHeroImageFromDB();
       if (dbImage) {
         setHeroImage(dbImage);
+      } else {
+        setHeroImage(STATIC_HERO_IMAGE);
       }
 
       setIsStorageLoaded(true); // Data loaded, now safe to save updates
@@ -98,12 +97,12 @@ const App: React.FC = () => {
     loadData();
   }, []);
 
-  // 2. Save Videos (Only if loaded)
+  // 2. Save Videos (Only if loaded) - We only save LOCAL videos to DB
   useEffect(() => {
     if (isStorageLoaded) {
-      saveAllVideos(videos);
+      saveAllVideos(localVideos);
     }
-  }, [videos, isStorageLoaded]);
+  }, [localVideos, isStorageLoaded]);
 
   // 3. Save Hero Image (Only if loaded)
   useEffect(() => {
@@ -121,6 +120,9 @@ const App: React.FC = () => {
   useEffect(() => {
     localStorage.setItem('paulinha_admin_mode', String(isAdminMode));
   }, [isAdminMode]);
+
+  // Combine Permanent + Local Videos
+  const allVideos = [...PERMANENT_VIDEOS, ...localVideos];
 
   // Interactions
   const handleVideoClick = (video: Video) => {
@@ -155,14 +157,20 @@ const App: React.FC = () => {
   // --- ADMIN FUNCTIONS ---
 
   const handleAddVideo = (newVideo: Video) => {
-    setVideos(prev => [newVideo, ...prev]);
+    setLocalVideos(prev => [newVideo, ...prev]);
     setIsUploadModalOpen(false);
   };
 
   const handleDeleteVideo = (id: string) => {
+    // Check if it's a permanent video
+    if (PERMANENT_VIDEOS.some(v => v.id === id)) {
+      alert("Este é um vídeo fixo do sistema (configurado em constants.ts) e não pode ser excluído pelo painel.");
+      return;
+    }
+
     const confirmDelete = window.confirm("Tem certeza que deseja EXCLUIR este vídeo permanentemente?");
     if (confirmDelete) {
-      setVideos(prev => {
+      setLocalVideos(prev => {
         const updated = prev.filter(v => v.id !== id);
         return updated;
       });
@@ -173,7 +181,7 @@ const App: React.FC = () => {
 
   const categories = ['Todos', 'Premium', 'Gratuitos'];
 
-  const filteredVideos = videos.filter(v => {
+  const filteredVideos = allVideos.filter(v => {
     if (selectedCategory === 'Todos') return true;
     if (selectedCategory === 'Premium') return v.isExclusive;
     if (selectedCategory === 'Gratuitos') return !v.isExclusive;
